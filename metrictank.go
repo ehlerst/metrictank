@@ -304,9 +304,14 @@ func main() {
 	}
 
 	/***********************************
+		Initialize the Chunk Cache
+	***********************************/
+	ccache := cache.NewCCache()
+
+	/***********************************
 		Initialize our MemoryStore
 	***********************************/
-	metrics = mdata.NewAggMetrics(store, chunkSpan, numChunks, chunkMaxStale, metricMaxStale, ttl, gcInterval, finalSettings)
+	metrics = mdata.NewAggMetrics(store, ccache.CacheIfHot, chunkSpan, numChunks, chunkMaxStale, metricMaxStale, ttl, gcInterval, finalSettings)
 
 	/***********************************
 		Initialize our Inputs
@@ -343,7 +348,6 @@ func main() {
 	/***********************************
 		Initialize our MetricIdx
 	***********************************/
-	ccache := cache.NewCCache()
 	pre := time.Now()
 
 	if memory.Enabled {

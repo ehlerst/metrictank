@@ -6,6 +6,7 @@ import (
 
 type Cache interface {
 	Add(string, uint32, chunk.IterGen)
+	CacheIfHot(string, uint32, *chunk.IterGen)
 	Stop()
 	Search(string, uint32, uint32) *CCSearchResult
 }
@@ -31,3 +32,5 @@ type CCSearchResult struct {
 	// ones in reverse order (because the search is seeking in reverse)
 	End []chunk.IterGen
 }
+
+type CacheCb func(string, uint32, *chunk.IterGen)

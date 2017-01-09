@@ -9,6 +9,7 @@ import (
 	"github.com/raintank/metrictank/cluster"
 	"github.com/raintank/metrictank/idx/memory"
 	"github.com/raintank/metrictank/mdata"
+	"github.com/raintank/metrictank/mdata/chunk"
 	"github.com/raintank/metrictank/usage"
 	"gopkg.in/raintank/schema.v1"
 )
@@ -16,7 +17,8 @@ import (
 func Test_Process(t *testing.T) {
 	cluster.Init("default", "test", time.Now())
 	store := mdata.NewDevnullStore()
-	aggmetrics := mdata.NewAggMetrics(store, 600, 10, 800, 8000, 10000, 0, make([]mdata.AggSetting, 0))
+	cacheCb := func(string, uint32, *chunk.IterGen) {}
+	aggmetrics := mdata.NewAggMetrics(store, cacheCb, 600, 10, 800, 8000, 10000, 0, make([]mdata.AggSetting, 0))
 	metricIndex := memory.New()
 	metricIndex.Init()
 	usage := usage.New(300, aggmetrics, metricIndex, clock.New())
@@ -86,8 +88,9 @@ func test_Process(worker int, in *Input, t *testing.T) map[string]int {
 func BenchmarkProcess(b *testing.B) {
 	cluster.Init("default", "test", time.Now())
 
+	cacheCb := func(string, uint32, *chunk.IterGen) {}
 	store := mdata.NewDevnullStore()
-	aggmetrics := mdata.NewAggMetrics(store, 600, 10, 800, 8000, 10000, 0, make([]mdata.AggSetting, 0))
+	aggmetrics := mdata.NewAggMetrics(store, cacheCb, 600, 10, 800, 8000, 10000, 0, make([]mdata.AggSetting, 0))
 	metricIndex := memory.New()
 	metricIndex.Init()
 	usage := usage.New(300, aggmetrics, metricIndex, clock.New())

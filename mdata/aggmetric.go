@@ -8,6 +8,7 @@ import (
 
 	"github.com/raintank/metrictank/cluster"
 	"github.com/raintank/metrictank/consolidation"
+	"github.com/raintank/metrictank/mdata/cache"
 	"github.com/raintank/metrictank/mdata/chunk"
 	"github.com/raintank/worldping-api/pkg/log"
 )
@@ -21,6 +22,7 @@ import (
 // AggMetric is concurrency-safe
 type AggMetric struct {
 	store Store
+	cache cache.CacheCb
 	sync.RWMutex
 	Key             string
 	CurrentChunkPos int    // element in []Chunks that is active. All others are either finished or nil.
@@ -34,9 +36,10 @@ type AggMetric struct {
 
 // NewAggMetric creates a metric with given key, it retains the given number of chunks each chunkSpan seconds long
 // it optionally also creates aggregations with the given settings
-func NewAggMetric(store Store, key string, chunkSpan, numChunks uint32, ttl uint32, aggsetting ...AggSetting) *AggMetric {
+func NewAggMetric(store Store, cache cache.CacheCb, key string, chunkSpan, numChunks uint32, ttl uint32, aggsetting ...AggSetting) *AggMetric {
 	m := AggMetric{
 		store:     store,
+		cache:     cache,
 		Key:       key,
 		ChunkSpan: chunkSpan,
 		NumChunks: numChunks,
@@ -44,7 +47,7 @@ func NewAggMetric(store Store, key string, chunkSpan, numChunks uint32, ttl uint
 		ttl:       ttl,
 	}
 	for _, as := range aggsetting {
-		m.aggregators = append(m.aggregators, NewAggregator(store, key, as.Span, as.ChunkSpan, as.NumChunks, as.Ttl))
+		m.aggregators = append(m.aggregators, NewAggregator(store, cache, key, as.Span, as.ChunkSpan, as.NumChunks, as.Ttl))
 	}
 
 	return &m
@@ -330,17 +333,35 @@ func (a *AggMetric) addAggregators(ts uint32, val float64) {
 	}
 }
 
+func (a *AggMetric) pushToCache(c *chunk.Chunk) {
+	// push into cache
+	go a.cache(
+		a.Key,
+		0,
+		chunk.NewBareIterGen(
+			c.Bytes(),
+			c.T0,
+			a.ChunkSpan,
+		),
+	)
+}
+
 // write a chunk to persistent storage. This should only be called while holding a.Lock()
 func (a *AggMetric) persist(pos int) {
+	chunk := a.Chunks[pos]
+
 	if !cluster.ThisNode.IsPrimary() {
 		if LogLevel < 2 {
 			log.Debug("AM persist(): node is not primary, not saving chunk.")
 		}
+
+		// no need to continue persisting, we just push the chunk into the local cache and return
+		chunk.Finish()
+		a.pushToCache(chunk)
 		return
 	}
 
 	pre := time.Now()
-	chunk := a.Chunks[pos]
 
 	if chunk.Saved || chunk.Saving {
 		// this can happen if chunk was persisted by GC (stale) and then new data triggered another persist call
@@ -405,6 +426,7 @@ func (a *AggMetric) persist(pos int) {
 		pending[pendingChunk].chunk.Finish()
 		a.store.Add(pending[pendingChunk])
 		pending[pendingChunk].chunk.Saving = true
+		a.pushToCache(pending[pendingChunk].chunk)
 		pendingChunk--
 	}
 	persistDuration.Value(time.Now().Sub(pre))
