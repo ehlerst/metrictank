@@ -52,6 +52,126 @@ func getConnectedChunks(metric string) *CCache {
 	return cc
 }
 
+// test AddIfHot method without passing a previous timestamp on a hot metric
+func TestAddIfHotWithoutPrevTsOnHotMetric(t *testing.T) {
+	metric := "metric1"
+	cc := NewCCache()
+
+	values := []uint32{1, 2, 3, 4, 5}
+	itgen1 := getItgen(values, 1000, false)
+	itgen2 := getItgen(values, 1005, false)
+	itgen3 := getItgen(values, 1010, false)
+
+	cc.Add(metric, 0, *itgen1)
+	cc.Add(metric, 1000, *itgen2)
+
+	cc.CacheIfHot(metric, 0, itgen3)
+
+	mc := cc.metricCache[metric]
+
+	chunk, ok := mc.chunks[1010]
+	if !ok {
+		t.Fatalf("expected cache chunk to have been cached")
+	}
+
+	if itgen3.Ts() != chunk.Ts {
+		t.Fatalf("cached chunk wasn't the expected one")
+	}
+
+	if chunk.Prev != 1005 {
+		t.Fatalf("expected cache chunk's previous ts to be 1005, but got %d", chunk.Prev)
+	}
+
+	if mc.chunks[chunk.Prev].Next != chunk.Ts {
+		t.Fatalf("previous cache chunk didn't point at this one as it's next, got %d", mc.chunks[chunk.Prev].Next)
+	}
+}
+
+// test AddIfHot method without passing a previous timestamp on a cold metric
+func TestAddIfHotWithoutPrevTsOnColdMetric(t *testing.T) {
+	metric := "metric1"
+	cc := NewCCache()
+
+	values := []uint32{1, 2, 3, 4, 5}
+	itgen1 := getItgen(values, 1000, false)
+	itgen3 := getItgen(values, 1010, false)
+
+	cc.Add(metric, 0, *itgen1)
+
+	cc.CacheIfHot(metric, 0, itgen3)
+
+	mc := cc.metricCache[metric]
+
+	_, ok := mc.chunks[1010]
+	if ok {
+		t.Fatalf("expected cache chunk to not have been cached")
+	}
+
+	if mc.chunks[1000].Next != 0 {
+		t.Fatalf("previous cache chunk got wrongly connected with a following one, got %d", mc.chunks[1000].Next)
+	}
+}
+
+// test AddIfHot method on a hot metric
+func TestAddIfHotWithPrevTsOnHotMetric(t *testing.T) {
+	metric := "metric1"
+	cc := NewCCache()
+
+	values := []uint32{1, 2, 3, 4, 5}
+	itgen1 := getItgen(values, 1000, false)
+	itgen2 := getItgen(values, 1005, false)
+	itgen3 := getItgen(values, 1010, false)
+
+	cc.Add(metric, 0, *itgen1)
+	cc.Add(metric, 1000, *itgen2)
+
+	cc.CacheIfHot(metric, 1005, itgen3)
+
+	mc := cc.metricCache[metric]
+
+	chunk, ok := mc.chunks[1010]
+	if !ok {
+		t.Fatalf("expected cache chunk to have been cached")
+	}
+
+	if itgen3.Ts() != chunk.Ts {
+		t.Fatalf("cached chunk wasn't the expected one")
+	}
+
+	if chunk.Prev != 1005 {
+		t.Fatalf("expected cache chunk's previous ts to be 1005, but got %d", chunk.Prev)
+	}
+
+	if mc.chunks[chunk.Prev].Next != chunk.Ts {
+		t.Fatalf("previous cache chunk didn't point at this one as it's next, got %d", mc.chunks[chunk.Prev].Next)
+	}
+}
+
+// test AddIfHot method on a cold metric
+func TestAddIfHotWithPrevTsOnColdMetric(t *testing.T) {
+	metric := "metric1"
+	cc := NewCCache()
+
+	values := []uint32{1, 2, 3, 4, 5}
+	itgen1 := getItgen(values, 1000, false)
+	itgen3 := getItgen(values, 1010, false)
+
+	cc.Add(metric, 0, *itgen1)
+
+	cc.CacheIfHot(metric, 1005, itgen3)
+
+	mc := cc.metricCache[metric]
+
+	_, ok := mc.chunks[1010]
+	if ok {
+		t.Fatalf("expected cache chunk to not have been cached")
+	}
+
+	if mc.chunks[1000].Next != 0 {
+		t.Fatalf("previous cache chunk got wrongly connected with a following one, got %d", mc.chunks[1000].Next)
+	}
+}
+
 func TestConsecutiveAdding(t *testing.T) {
 	metric := "metric1"
 	cc := NewCCache()
