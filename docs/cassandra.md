@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS raintank.metric_idx (
     mtype text,
     tags set<text>,
     lastupdate int,
-    PRIMARY KEY (id, partition)
+    PRIMARY KEY (partition, id)
 ) WITH compaction = {'class': 'SizeTieredCompactionStrategy'}
     AND compression = {'sstable_compression': 'org.apache.cassandra.io.compress.LZ4Compressor'};
 CREATE INDEX IF NOT EXISTS ON raintank.metric_idx(partition);
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS raintank.metric_idx (
     mtype text,
     tags set<text>,
     lastupdate int,
-    PRIMARY KEY (id, partition)
+    PRIMARY KEY (partition, id)
 ) WITH compaction = {'class': 'SizeTieredCompactionStrategy'}
     AND compression = {'sstable_compression': 'org.apache.cassandra.io.compress.LZ4Compressor'};
 CREATE INDEX IF NOT EXISTS ON raintank.metric_idx(partition);
